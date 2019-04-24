@@ -1,0 +1,13 @@
+The edited version of the dataset contains:
+
+Users file: 
+The users that appear here are only the users that mentioned their age and that it's between 2 and 100. 
+The file is a .csv file of user-IDs and ages.
+
+Books file: 
+Several books were removed because they didn't match the format I used.
+The books' file is a .csv file where each row has a book's ISBN, its author and its year of publication.
+
+Ratings file:
+This file is a .csv file with rows [User-ID, ISBN, Book-Rating] only for the filtered users and books.
+Contains 167,027 users, providing 524,288 ratings (including zeros) about 270,367 books. 
