@@ -1,7 +1,7 @@
 Link to download:
 
 http://www2.informatik.uni-freiburg.de/~cziegler/BX/
-
+(download the csv files)
 ------
 Collected by Cai-Nicolas Ziegler in a 4-week crawl (August / September 2004) from the Book-Crossing community with kind permission from Ron Hornbaker, 
 CTO of Humankind Systems. 

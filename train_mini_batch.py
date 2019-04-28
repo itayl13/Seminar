@@ -13,11 +13,11 @@ import scipy.sparse as sp
 
 import json
 
-from gcmc.preprocessing import create_trainvaltest_split, \
+from preprocessing import create_trainvaltest_split, \
     sparse_to_tuple, preprocess_user_item_features, globally_normalize_bipartite_adjacency, load_data_books
-from gcmc.model import RecommenderGAE
-from gcmc.utils import construct_feed_dict
-from gcmc.data_utils import data_iterator
+from model import RecommenderGAE
+from utils import construct_feed_dict
+from data_utils import data_iterator
 
 
 # Set random seed
@@ -28,7 +28,8 @@ tf.set_random_seed(seed)
 
 # Settings
 ap = argparse.ArgumentParser()
-ap.add_argument("-d", "--dataset", type=str, default="ml_1m", choices=['ml_100k', 'ml_1m', 'ml_10m', 'books_crossing'],
+ap.add_argument("-d", "--dataset", type=str, default="book_crossing",
+                choices=['ml_100k', 'ml_1m', 'ml_10m', 'book_crossing'],
                 help="Dataset string.")
 
 ap.add_argument("-lr", "--learning_rate", type=float, default=0.01,
@@ -46,7 +47,7 @@ ap.add_argument("-do", "--dropout", type=float, default=0.3,
                 help="Dropout fraction")
 ap.add_argument("-edo", "--edge_dropout", type=float, default=0.,
                 help="Edge dropout rate (1 - keep probability).")
-ap.add_argument("-nb", "--num_basis_functions", type=int, default=2,
+ap.add_argument("-nb", "--num_basis_functions", type=int, default=4,
                 help="Number of basis functions for Mixture Model GCN.")
 
 ap.add_argument("-ds", "--data_seed", type=int, default=1234,
@@ -78,14 +79,14 @@ fp.add_argument('-ws', '--write_summary', dest='write_summary',
                 help="Option to turn on summary writing", action='store_true')
 fp.add_argument('-no_ws', '--no_write_summary', dest='write_summary',
                 help="Option to turn off summary writing", action='store_false')
-ap.set_defaults(write_summary=False)
+ap.set_defaults(write_summary=True)
 
 fp = ap.add_mutually_exclusive_group(required=False)
 fp.add_argument('-t', '--testing', dest='testing',
                 help="Option to turn on test set evaluation", action='store_true')
 fp.add_argument('-v', '--validation', dest='testing',
                 help="Option to only use validation set evaluation", action='store_false')
-ap.set_defaults(testing=False)
+ap.set_defaults(testing=True)
 
 
 args = vars(ap.parse_args())
@@ -114,7 +115,7 @@ SPLITFROMFILE = True
 VERBOSE = True
 if DATASET == 'ml_1m' or DATASET == 'ml_100k':
     NUMCLASSES = 5
-elif DATASET == 'ml_10m' or DATASET == 'books crossing':
+elif DATASET == 'ml_10m' or DATASET == 'book_crossing':
     NUMCLASSES = 10
 else:
     raise ValueError('Invalid choice of dataset: %s' % DATASET)

@@ -13,11 +13,11 @@ import scipy.sparse as sp
 import sys
 import json
 
-from gcmc.preprocessing import create_trainvaltest_split, \
+from preprocessing import create_trainvaltest_split, \
     sparse_to_tuple, preprocess_user_item_features, globally_normalize_bipartite_adjacency, \
-    load_data_monti, load_official_trainvaltest_split, normalize_features
-from gcmc.model import RecommenderGAE, RecommenderSideInfoGAE
-from gcmc.utils import construct_feed_dict
+    load_data_monti, load_official_trainvaltest_split, normalize_features, load_data_books
+from model import RecommenderGAE, RecommenderSideInfoGAE
+from utils import construct_feed_dict
 
 # Set random seed
 # seed = 123 # use only for unit testing
@@ -27,29 +27,29 @@ tf.set_random_seed(seed)
 
 # Settings
 ap = argparse.ArgumentParser()
-ap.add_argument("-d", "--dataset", type=str, default="ml_1m",
+ap.add_argument("-d", "--dataset", type=str, default="book_crossing",
                 choices=['ml_100k', 'ml_1m', 'ml_10m', 'douban', 'yahoo_music', 'flixster', 'book_crossing'],
                 help="Dataset string.")
 
 ap.add_argument("-lr", "--learning_rate", type=float, default=0.01,
                 help="Learning rate")
 
-ap.add_argument("-e", "--epochs", type=int, default=2500,
+ap.add_argument("-e", "--epochs", type=int, default=20,
                 help="Number training epochs")
 
 ap.add_argument("-hi", "--hidden", type=int, nargs=2, default=[500, 75],
                 help="Number hidden units in 1st and 2nd layer")
 
-ap.add_argument("-fhi", "--feat_hidden", type=int, default=64,
+ap.add_argument("-fhi", "--feat_hidden", type=int, default=10,
                 help="Number hidden units in the dense layer for features")
 
-ap.add_argument("-ac", "--accumulation", type=str, default="sum", choices=['sum', 'stack'],
+ap.add_argument("-ac", "--accumulation", type=str, default="stack", choices=['sum', 'stack'],
                 help="Accumulation function: sum or stack.")
 
-ap.add_argument("-do", "--dropout", type=float, default=0.7,
+ap.add_argument("-do", "--dropout", type=float, default=0.3,
                 help="Dropout fraction")
 
-ap.add_argument("-nb", "--num_basis_functions", type=int, default=2,
+ap.add_argument("-nb", "--num_basis_functions", type=int, default=4,
                 help="Number of basis functions for Mixture Model GCN.")
 
 ap.add_argument("-ds", "--data_seed", type=int, default=1234,
@@ -79,14 +79,14 @@ fp.add_argument('-ws', '--write_summary', dest='write_summary',
                 help="Option to turn on summary writing", action='store_true')
 fp.add_argument('-no_ws', '--no_write_summary', dest='write_summary',
                 help="Option to turn off summary writing", action='store_false')
-ap.set_defaults(write_summary=False)
+ap.set_defaults(write_summary=True)
 
 fp = ap.add_mutually_exclusive_group(required=False)
 fp.add_argument('-t', '--testing', dest='testing',
                 help="Option to turn on test set evaluation", action='store_true')
 fp.add_argument('-v', '--validation', dest='testing',
                 help="Option to only use validation set evaluation", action='store_false')
-ap.set_defaults(testing=False)
+ap.set_defaults(testing=True)
 
 
 args = vars(ap.parse_args())
@@ -118,9 +118,9 @@ if DATASET == 'ml_1m' or DATASET == 'ml_100k' or DATASET == 'douban':
     NUMCLASSES = 5
 elif DATASET == 'ml_10m' or DATASET == 'book_crossing':
     NUMCLASSES = 10
-    print('\n WARNING: this might run out of RAM, consider using train_minibatch.py for dataset %s' % DATASET)
-    print('If you want to proceed with this option anyway, uncomment this.\n')
-    sys.exit(1)
+    # print('\n WARNING: this might run out of RAM, consider using train_minibatch.py for dataset %s' % DATASET)
+    # print('If you want to proceed with this option anyway, uncomment this.\n')
+    # sys.exit(1)
 elif DATASET == 'flixster':
     NUMCLASSES = 10
 elif DATASET == 'yahoo_music':
@@ -154,6 +154,10 @@ elif DATASET == 'ml_100k':
     u_features, v_features, adj_train, train_labels, train_u_indices, train_v_indices, \
         val_labels, val_u_indices, val_v_indices, test_labels, \
         test_u_indices, test_v_indices, class_values = load_official_trainvaltest_split(DATASET, TESTING)
+elif DATASET == 'book_crossing':
+    u_features, v_features, adj_train, train_labels, train_u_indices, train_v_indices, \
+      val_labels, val_u_indices, val_v_indices, test_labels, \
+      test_u_indices, test_v_indices, class_values = load_data_books(TESTING)
 else:
     print("Using random dataset split ...")
     u_features, v_features, adj_train, train_labels, train_u_indices, train_v_indices, \

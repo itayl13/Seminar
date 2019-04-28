@@ -4,12 +4,13 @@ from __future__ import print_function
 import numpy as np
 import scipy.sparse as sp
 import cPickle as pkl
+import csv
 import os
 import h5py
 import pandas as pd
 
 
-from gcmc.data_utils import load_data, map_data, download_dataset
+from data_utils import load_data, map_data, download_dataset
 
 
 def normalize_features(feat):
@@ -567,65 +568,133 @@ def load_official_trainvaltest_split(dataset, testing=False):
         val_labels, u_val_idx, v_val_idx, test_labels, u_test_idx, v_test_idx, class_values
 
 
-def edit_book_files():
+def filter_by_features():
     old_user_f = pd.read_csv(open(os.path.join('data', 'book_crossing_original', 'BX-Users.csv'), 'r'), ';')
     new_user_f = open(os.path.join('data', 'book_crossing_edited', 'BX-Users_new.csv'), 'w')
     w = csv.writer(new_user_f)
     w.writerow(['User-ID', 'Age'])
-    valid_user_list = []
+    user_dict = {}
+    user_id_new = 0
     for i in range(old_user_f.shape[0]):
         if np.isnan(old_user_f.loc[i, 'Age']) or 2 > old_user_f.loc[i, 'Age'] or old_user_f.loc[i, 'Age'] > 100:
             continue
-        valid_user_list.append(old_user_f.loc[i, 'User-ID'])
-        w.writerow([old_user_f.loc[i, 'User-ID'], old_user_f.loc[i, 'Age']])
+        user_dict[old_user_f.loc[i, 'User-ID']] = user_id_new
+        w.writerow([user_id_new, old_user_f.loc[i, 'Age']])
+        user_id_new += 1
     new_user_f.close()
 
     old_book_f = open(os.path.join('data', 'book_crossing_original', 'BX-Books.csv'), 'r')
-    new_book_f = open(os.path.join('data', 'book_crossing_edited', 'BX-Books_new_.csv'), 'w')
+    new_book_f = open(os.path.join('data', 'book_crossing_edited', 'BX-Books_new.csv'), 'w')
     wr = csv.writer(new_book_f)
     wr.writerow(['ISBN', 'Book-Author', 'Year-Of-Publication'])
-    valid_book_list = []
+    isbn_to_idx = {}
+    idx = 0
     for line in old_book_f.readlines():
-        spline = line.split(sep=';')
+        try:
+            spline = line.split(';')
+        except TypeError:
+            print(line)
+            raise TypeError
         if len(spline) != 8 or spline[0] == '"ISBN':
             continue
-        valid_book_list.append(spline[0].split('"')[1])
-        wr.writerow([spline[0].split('"')[1], spline[2].split('""')[1].casefold(), spline[3].split('""')[1]])
+
+        try:
+            wr.writerow([idx, spline[2].split('""')[1].decode('utf-8').lower(), spline[3].split('""')[1]])
+            isbn_to_idx[spline[0].split('"')[1]] = idx
+            idx += 1
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            continue
     old_book_f.close()
     new_book_f.close()
 
-    valid_books = set(valid_book_list)
-    valid_users = set(valid_user_list)
+    valid_books = isbn_to_idx.keys()
+    valid_users = user_dict.keys()
+    users_left = set()
+    items_left = set()
+    ratings = 0
     old_matrix_f = pd.read_csv(open(os.path.join('data', 'book_crossing_original', 'BX-Book-Ratings.csv'), 'r'), ';')
     new_matrix_f = open(os.path.join('data', 'book_crossing_edited', 'BX-Book-Ratings_new.csv'), 'w')
     wrt = csv.writer(new_matrix_f)
-    wrt.writerow(['User-ID', 'ISBN', 'Book-Rating'])
+    wrt.writerow(['User_Idx', 'Book_Idx', 'Book-Rating'])
     for i in range(old_matrix_f.shape[0]):
-        if old_matrix_f.loc[i, 'ISBN'] in valid_books and old_matrix_f.loc[i, 'User-ID'] in valid_users:
-            wrt.writerow([old_matrix_f.loc[i, 'User-ID'], old_matrix_f.loc[i, 'ISBN'],
+        if all([old_matrix_f.loc[i, 'ISBN'] in valid_books, old_matrix_f.loc[i, 'User-ID'] in valid_users,
+                old_matrix_f.loc[i, 'Book-Rating']]):
+            wrt.writerow([user_dict[old_matrix_f.loc[i, 'User-ID']], isbn_to_idx[old_matrix_f.loc[i, 'ISBN']],
                           old_matrix_f.loc[i, 'Book-Rating']])
+            users_left.add(old_matrix_f.loc[i, 'User-ID'])
+            items_left.add(old_matrix_f.loc[i, 'ISBN'])
+            ratings += 1
     new_matrix_f.close()
+    with open(os.path.join('data', 'book_crossing_edited', 'user_dictionary.csv'), 'w') as f1:
+        w1 = csv.DictWriter(f1, user_dict)
+        w1.writeheader()
+        w1.writerow(user_dict)
+    with open(os.path.join('data', 'book_crossing_edited', 'isbn_dictionary.csv'), 'w') as f2:
+        w2 = csv.DictWriter(f2, isbn_to_idx)
+        w2.writeheader()
+        w2.writerow(isbn_to_idx)
+    return user_dict, isbn_to_idx
+
+
+def edit_book_files():
+    if not os.path.exists(os.path.join('data', 'book_crossing_edited', 'isbn_dictionary.csv')):
+        _, _ = filter_by_features()
+
+    user_matrix = pd.read_csv(os.path.join('data', 'book_crossing_edited', 'BX-Users_new.csv'))
+    book_matrix = pd.read_csv(os.path.join('data', 'book_crossing_edited', 'BX-Books_new.csv'))
+    rating_matrix = pd.read_csv(os.path.join('data', 'book_crossing_edited', 'BX-Book-Ratings_new.csv'))
+    filtered_user_mat = pd.DataFrame(columns=user_matrix.columns)
+    filtered_books_mat = pd.DataFrame(columns=book_matrix.columns)
+    filtered_rating_mat = pd.DataFrame(columns=rating_matrix.columns)
+    previous_book_count = float(len(np.unique(book_matrix['ISBN'])))
+
+    remaining_users = set()
+    ratings_count = 0
+    counts = {u: 0 for u in np.unique(rating_matrix['User_Idx'])}
+    for _, row in rating_matrix.iterrows():
+        counts[row.loc['User_Idx']] += 1. / previous_book_count
+        if counts[row.loc['User_Idx']] > 0.00005:
+            remaining_users.add(row.loc['User_Idx'])
+            ratings_count += 1
+            filtered_rating_mat = filtered_rating_mat.append(row, ignore_index=True)
+    remaining_books = np.unique(filtered_rating_mat['Book_Idx'])
+    print("Valid users: ", len(remaining_users))
+    print("Valid books: ", len(remaining_books))
+    filtered_rating_mat.to_csv(os.path.join('data', 'book_crossing_edited', 'BX-Book-Ratings_filtered.csv'), index=False)
+
+    for _, row in user_matrix.iterrows():
+        if row.loc['User-ID'] in remaining_users:
+            filtered_user_mat = filtered_user_mat.append(row, ignore_index=True)
+    filtered_user_mat.to_csv(os.path.join('data', 'book_crossing_edited', 'BX-Users_filtered.csv'), index=False)
+
+    for _, row in book_matrix.iterrows():
+        if row.loc['ISBN'] in remaining_books:
+            filtered_books_mat = filtered_books_mat.append(row, ignore_index=True)
+    filtered_books_mat.to_csv(os.path.join('data', 'book_crossing_edited', 'BX-Books_filtered.csv'), index=False)
+
+    print("Total ratings: ", ratings_count)
 
 
 def load_data_books(testing=False):
-    if not os.path.exists(os.path.join('data', 'book_crossing_edited', 'BX-Book-Ratings_new.csv')):
+    if not os.path.exists(os.path.join('data', 'book_crossing_edited', 'BX-Book-Ratings_filtered.csv')):
         edit_book_files()
     dtypes = {
         'u_nodes': np.int32, 'v_nodes': np.str,
         'ratings': np.int32}
 
-    matrix_source = pd.read_csv(open(os.path.join('data', 'book_crossing_edited', 'BX-Book-Ratings_new.csv'), 'r'))
+    matrix_source = np.array(pd.read_csv(open(os.path.join('data', 'book_crossing_edited', 'BX-Book-Ratings_filtered.csv'),
+                                              'r')))
 
     np.random.seed(42)
-    test_indices = np.random.choice(range(matrix_source.shape[0]), matrix_source.shape[0] // 10, replace=False)
-    train_indices = list(set(range(matrix_source.shape[0])).difference(set(test_indices)))
+    test_indices = np.random.choice(np.arange(matrix_source.shape[0]), matrix_source.shape[0] // 10, replace=False)
+    mask = np.array([(i in test_indices) for i in np.arange(matrix_source.shape[0])])
 
-    data_train = matrix_source[train_indices, :]
-    data_test = matrix_source[test_indices, :]
+    data_train = matrix_source[~mask, :]
+    data_test = matrix_source[mask, :]
 
-    data_array_train = data_train.as_matrix().tolist()
+    data_array_train = data_train.tolist()
     data_array_train = np.array(data_array_train)
-    data_array_test = data_test.as_matrix().tolist()
+    data_array_test = data_test.tolist()
     data_array_test = np.array(data_array_test)
 
     data_array = np.concatenate([data_array_train, data_array_test], axis=0)
@@ -720,7 +789,7 @@ def load_data_books(testing=False):
 
     # Side information features
     # book features
-    book_df = pd.read_csv(open(os.path.join('data', 'book_crossing_edited', 'BX-Books_new.csv'), 'r'))
+    book_df = pd.read_csv(open(os.path.join('data', 'book_crossing_edited', 'BX-Books_filtered.csv'), 'r'))
 
     author_dict = {f: i for i, f in enumerate(set(book_df['Book-Author'].values.tolist()), start=2)}
     year = book_df['Year-Of-Publication'].values
@@ -739,14 +808,14 @@ def load_data_books(testing=False):
             v_features[v_dict[v_id], author_dict[row['Book-Author']]] = 1.
 
     # user features
-    users_df = pd.read_csv(open(os.path.join('data', 'book_crossing_edited', 'BX-Users_new.csv'), 'r'))
+    users_df = pd.read_csv(open(os.path.join('data', 'book_crossing_edited', 'BX-Users_filtered.csv'), 'r'))
 
     age = users_df['Age'].values
     age_max = age.max()
 
     u_features = np.zeros((num_users, 1), dtype=np.float32)
     for _, row in users_df.iterrows():
-        u_id = row['user id']
+        u_id = row['User-ID']
         if u_id in u_dict.keys():
             u_features[u_dict[u_id], 0] = row['Age'] / np.float(age_max)
 
@@ -758,3 +827,7 @@ def load_data_books(testing=False):
 
     return u_features, v_features, rating_mx_train, train_labels, u_train_idx, v_train_idx, \
            val_labels, u_val_idx, v_val_idx, test_labels, u_test_idx, v_test_idx, class_values
+
+
+if __name__ == "__main__":
+    load_data_books(True)

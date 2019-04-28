@@ -32,7 +32,12 @@ def expected_rmse(logits, labels, class_values=None):
         scores = class_values
         y = tf.gather(class_values, labels)
 
-    pred_y = tf.reduce_sum(probs * scores, 1)
+    try:
+        pred_y = tf.reduce_sum(tf.multiply(probs, scores), 1)
+    except ValueError:
+        print("Probs vector: ", probs)
+        print("Classes (=scores) vector: ", scores)
+        raise ValueError
 
     diff = tf.subtract(y, pred_y)
     exp_rmse = tf.square(diff)

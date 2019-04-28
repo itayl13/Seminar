@@ -1,26 +1,50 @@
-*.pyc
+﻿*.pyc
+
 *.npz
+
 *.npy
+
 *.pickle
+
 *.pdf
+
 .ipynb_checkpoints
+
 .idea
+
 *.ipynb
+
 *.DS_Store
+
 *.ttl
+
 *.nt
+
 *#
+
 *~
 
+
+
 # Don't save data to repo
-gcmc/data/ml_100k/*
-gcmc/data/ml_1m/*
-gcmc/data/ml_10m/*
-gcmc/data/*.csv
+
+data/ml_100k/*
+
+data/ml_1m/*
+
+data/ml_10m/*
+data/*.csv
+data/book_crossing_original/*.csv
+
+
+
 
 # Don’t keep track of logs or saved models
-gcmc/logs/*
-gcmc/tmp/*
+logs/*
+
+tmp/*
+
+
 
 # Only save directories with readme files
 !gcmc/data/ml_100k/README.md
