@@ -73,7 +73,7 @@ python train.py -d book_crossing --accum stack -do 0.7 -nleft -nb 2 -e 200 --fea
 ```
 
 ## View Results
-The results are represented in a TensorFlow summary. In order to see them, run the following command in the virtual environment:
+The results are represented in a TensorFlow summary. In order to see them, run the following command in the virtual environment (alternatively, in command line using ```bash python -m tensorboard.main --logdir=path/to/dir```):
 ```bash
 tensorboard --logdir=path/to/log/dir
 # Path example: logs/MovieLens_100K_hidden_feat
